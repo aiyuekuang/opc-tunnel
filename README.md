@@ -124,7 +124,7 @@ Token 是一串 Base64 编码的字符串，类似：
 eyJvcGNJZCI6IjEyMzQ1Njc4LTEyMzQtMTIzNC0xMjM0LTEyMzQ1Njc4OTAxMiIsInR1bm5lbE5hbWUiOiJteS1vcGMiLCJkb21haW4iOiJteS1vcGMub3BjLmFwcCIsImFwaUJhc2UiOiJodHRwczovL2FwaS5vcGMuYXBwIiwibG9jYWxQb3J0IjozMDAwfQ==
 ```
 
-Token 包含你的 OPC 配置信息（隧道名称、域名、本地端口等），由 App 自动生成，**有效期 24 小时**。
+Token 包含你的 OPC 配置信息（隧道名称、域名、本地端口等），由 App 自动生成。**Token 仅用于首次配置，配置完成后就不再需要。**有效期 7 天。
 
 ---
 
@@ -319,7 +319,7 @@ Token 是 OPC App 生成的 Base64 编码 JSON，包含以下信息：
 }
 ```
 
-> Token 仅用于初次配置，不会存储在本地。过期后需从 App 重新获取。
+> **Token 只是一次性配置凭证**：首次 `setup` 时用来传递你的 OPC 信息到电脑，配置完成后隧道靠 cloudflared 自身运行，与 Token 无关。只有重新配置（换域名、换电脑）时才需要新 Token。
 
 ---
 
