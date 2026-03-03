@@ -1,6 +1,6 @@
 {
   "name": "opc-tunnel",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "一键配置 Cloudflare Tunnel，让你的本地服务通过 OPC App 安全访问",
   "keywords": ["cloudflare", "tunnel", "opc", "one-person-company", "cli"],
   "license": "MIT",
