@@ -1,28 +1,131 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
-import { setup } from './setup.js';
-import { detectPlatform, isCloudflaredInstalled, getCloudflaredVersion } from './detect.js';
-import { tunnelExists } from './tunnel.js';
-import { removeService } from './service.js';
+import ora from 'ora';
+import { DEFAULT_API_BASE, interactiveLogin } from './auth.js';
+import { qrSetup } from './qr-auth.js';
+import { loadConfig, saveConfig, configExists, getConfigPath } from './config.js';
+import { Skill } from './skill.js';
+import type { SkillConfig } from './types.js';
+import type { ApiResponse } from './types.js';
 
 const program = new Command();
 
 program
-  .name('opc-tunnel')
-  .description('OPC Tunnel 配置工具 — 一键打通本地服务到 OPC App')
-  .version('0.1.0');
+  .name('openclaw-skill-opc')
+  .description('OpenClaw Skill for OPC — AI 聊天 + P2P 网站访问')
+  .version('1.0.0');
 
 program
   .command('setup')
-  .description('配置 Cloudflare Tunnel (从 OPC App 获取 Token)')
-  .requiredOption('-t, --token <token>', '配置 Token (从 OPC App 获取)')
-  .option('--no-service', '不创建开机自启服务')
-  .action(async (options) => {
+  .description('配置 Skill 并绑定到你的 OPC')
+  .argument('<port>', '本地 Web 服务端口 (例如: 3000)', (v) => {
+    const n = parseInt(v, 10);
+    if (isNaN(n) || n < 1 || n > 65535) {
+      throw new Error('端口号必须是 1-65535 之间的数字');
+    }
+    return n;
+  })
+  .option('--openclaw-port <port>', 'OpenClaw 端口', '18789')
+  .option('--api <url>', 'OPC 后端地址', DEFAULT_API_BASE)
+  .option('--login', '使用账号密码登录（替代扫码授权）')
+  .action(async (port: number, options) => {
     try {
-      await setup({
-        token: options.token,
-        noService: !options.service,
-      });
+      console.log('');
+      console.log(chalk.bold('🔧 OpenClaw Skill for OPC — 配置向导'));
+      console.log(chalk.dim('─'.repeat(40)));
+      console.log('');
+
+      const apiBase = options.api;
+      const openclawPort = parseInt(options.openclawPort, 10);
+
+      let config: SkillConfig;
+
+      if (options.login) {
+        // Interactive login → fetch OPC info
+        const loginResult = await interactiveLogin(apiBase);
+        console.log('');
+        ora().start().succeed(`登录成功，欢迎 ${chalk.cyan(loginResult.nickname)}`);
+
+        // Generate skill key
+        const spinner = ora('生成 Skill 密钥...').start();
+        const res = await fetch(`${apiBase}/api/skill/generate-key`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${loginResult.jwt}`,
+          },
+          body: JSON.stringify({ localPort: port }),
+        });
+
+        const data = (await res.json()) as ApiResponse<{ opcId: string; opcName: string; secretKey: string }>;
+        if (data.code !== 0) throw new Error(data.msg);
+
+        spinner.succeed('Skill 密钥已生成');
+
+        config = {
+          opcId: data.data.opcId,
+          opcName: data.data.opcName,
+          secretKey: data.data.secretKey,
+          localPort: port,
+          openclawPort,
+          apiBase,
+        };
+      } else {
+        // QR code scan
+        const result = await qrSetup(apiBase, port, openclawPort);
+
+        config = {
+          opcId: result.opcId,
+          opcName: result.opcName,
+          secretKey: result.secretKey,
+          localPort: port,
+          openclawPort,
+          apiBase,
+        };
+      }
+
+      saveConfig(config);
+
+      console.log('');
+      console.log(chalk.green.bold('✅ 配置完成！'));
+      console.log('');
+      console.log(`  OPC: ${chalk.cyan(config.opcName)}`);
+      console.log(`  本地端口: ${chalk.cyan(String(config.localPort))}`);
+      console.log(`  OpenClaw: ${chalk.cyan(`http://127.0.0.1:${config.openclawPort}`)}`);
+      console.log(`  配置文件: ${chalk.dim(getConfigPath())}`);
+      console.log('');
+      console.log(chalk.dim('运行以下命令启动 Skill:'));
+      console.log(chalk.cyan('  openclaw-skill-opc start'));
+      console.log('');
+    } catch (e: any) {
+      console.error(chalk.red('❌ ' + e.message));
+      process.exit(1);
+    }
+  });
+
+program
+  .command('start')
+  .description('启动 Skill (连接 OPC 后端，等待 P2P 连接)')
+  .action(() => {
+    try {
+      if (!configExists()) {
+        console.error(chalk.red('❌ 未找到配置，请先运行: openclaw-skill-opc setup <port>'));
+        process.exit(1);
+      }
+
+      const config = loadConfig();
+      const skill = new Skill(config);
+
+      // Graceful shutdown
+      const shutdown = () => {
+        console.log('');
+        skill.stop();
+        process.exit(0);
+      };
+      process.on('SIGINT', shutdown);
+      process.on('SIGTERM', shutdown);
+
+      skill.start();
     } catch (e: any) {
       console.error(chalk.red('❌ ' + e.message));
       process.exit(1);
@@ -31,58 +134,25 @@ program
 
 program
   .command('status')
-  .description('查看当前 Tunnel 状态')
-  .option('-n, --name <name>', 'Tunnel 名称')
-  .action((options) => {
+  .description('查看当前 Skill 配置状态')
+  .action(() => {
     console.log('');
-    console.log(chalk.bold('📊 OPC Tunnel 状态'));
+    console.log(chalk.bold('📊 OpenClaw Skill 状态'));
     console.log(chalk.dim('─'.repeat(40)));
     console.log('');
 
-    // Platform
-    const plat = detectPlatform();
-    console.log(`  系统: ${plat}`);
-
-    // cloudflared
-    if (isCloudflaredInstalled()) {
-      const version = getCloudflaredVersion();
-      console.log(`  cloudflared: ${chalk.green('已安装')} ${chalk.dim(`(${version})`)}`);
+    if (!configExists()) {
+      console.log(chalk.yellow('  未配置。请运行: openclaw-skill-opc setup <port>'));
     } else {
-      console.log(`  cloudflared: ${chalk.red('未安装')}`);
-      return;
+      const config = loadConfig();
+      console.log(`  OPC: ${chalk.cyan(config.opcName)}`);
+      console.log(`  OPC ID: ${chalk.dim(config.opcId.slice(0, 8) + '...')}`);
+      console.log(`  本地端口: ${chalk.cyan(String(config.localPort))}`);
+      console.log(`  OpenClaw 端口: ${chalk.cyan(String(config.openclawPort))}`);
+      console.log(`  API: ${chalk.dim(config.apiBase)}`);
+      console.log(`  配置文件: ${chalk.dim(getConfigPath())}`);
     }
 
-    // Tunnel
-    if (options.name) {
-      const info = tunnelExists(options.name);
-      if (info) {
-        console.log(`  Tunnel "${options.name}": ${chalk.green('存在')} ${chalk.dim(`(${info.id.slice(0, 8)}...)`)}`);
-      } else {
-        console.log(`  Tunnel "${options.name}": ${chalk.red('不存在')}`);
-      }
-    }
-
-    console.log('');
-  });
-
-program
-  .command('remove')
-  .description('移除 Tunnel 配置和系统服务')
-  .requiredOption('-n, --name <name>', 'Tunnel 名称')
-  .action((options) => {
-    console.log('');
-    const plat = detectPlatform();
-
-    try {
-      removeService(plat, options.name);
-      console.log(chalk.green(`✅ 已移除 Tunnel "${options.name}" 的系统服务`));
-    } catch {
-      console.log(chalk.yellow(`⚠ 未找到 "${options.name}" 的系统服务`));
-    }
-
-    console.log('');
-    console.log(chalk.dim('注意: Tunnel 本身未删除。如需删除，请运行:'));
-    console.log(chalk.cyan(`  cloudflared tunnel delete ${options.name}`));
     console.log('');
   });
 

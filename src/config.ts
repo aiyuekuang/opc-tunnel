@@ -1,48 +1,34 @@
-import { writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { writeFileSync, readFileSync, mkdirSync, existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { stringify } from 'yaml';
-import type { TunnelToken } from './token.js';
+import type { SkillConfig } from './types.js';
 
-export function getCloudflaredDir(): string {
-  return join(homedir(), '.cloudflared');
+const CONFIG_DIR = join(homedir(), '.openclaw', 'skills', 'opc');
+const CONFIG_FILE = join(CONFIG_DIR, 'config.json');
+
+export function getConfigDir(): string {
+  return CONFIG_DIR;
 }
 
-export function getConfigPath(tunnelName: string): string {
-  return join(getCloudflaredDir(), `config-${tunnelName}.yml`);
+export function getConfigPath(): string {
+  return CONFIG_FILE;
 }
 
-export interface TunnelCredentials {
-  tunnelId: string;
-  credentialsFile: string;
+export function configExists(): boolean {
+  return existsSync(CONFIG_FILE);
 }
 
-export function generateConfig(
-  token: TunnelToken,
-  credentials: TunnelCredentials,
-): string {
-  const config = {
-    tunnel: credentials.tunnelId,
-    'credentials-file': credentials.credentialsFile,
-    ingress: [
-      {
-        hostname: token.domain,
-        service: `http://localhost:${token.localPort}`,
-      },
-      { service: 'http_status:404' },
-    ],
-  };
-
-  return stringify(config);
-}
-
-export function writeConfig(tunnelName: string, content: string): string {
-  const dir = getCloudflaredDir();
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true });
+export function loadConfig(): SkillConfig {
+  if (!existsSync(CONFIG_FILE)) {
+    throw new Error('配置不存在，请先运行 setup 命令');
   }
+  const raw = readFileSync(CONFIG_FILE, 'utf-8');
+  return JSON.parse(raw) as SkillConfig;
+}
 
-  const configPath = getConfigPath(tunnelName);
-  writeFileSync(configPath, content, 'utf-8');
-  return configPath;
+export function saveConfig(config: SkillConfig): void {
+  if (!existsSync(CONFIG_DIR)) {
+    mkdirSync(CONFIG_DIR, { recursive: true });
+  }
+  writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), 'utf-8');
 }

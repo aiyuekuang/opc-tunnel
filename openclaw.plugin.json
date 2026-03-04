@@ -1,0 +1,18 @@
+{
+  "name": "opc-skill",
+  "displayName": "OPC Portal Skill",
+  "version": "1.0.0",
+  "description": "连接 OPC Portal 平台，提供 AI 聊天 + P2P 网站访问能力",
+  "author": "OPC Team",
+  "hooks": {
+    "agent": {
+      "description": "AI 聊天代理端点",
+      "type": "http",
+      "method": "POST",
+      "path": "/hooks/agent"
+    }
+  },
+  "permissions": [
+    "network"
+  ]
+}

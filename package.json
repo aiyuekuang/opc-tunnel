@@ -1,8 +1,16 @@
 {
-  "name": "opc-tunnel",
-  "version": "0.1.1",
-  "description": "一键配置 Cloudflare Tunnel，让你的本地服务通过 OPC App 安全访问",
-  "keywords": ["cloudflare", "tunnel", "opc", "one-person-company", "cli"],
+  "name": "openclaw-skill-opc",
+  "version": "1.0.0",
+  "description": "OpenClaw Skill for OPC — AI 聊天 + WebRTC P2P 网站访问",
+  "keywords": [
+    "openclaw",
+    "skill",
+    "opc",
+    "webrtc",
+    "p2p",
+    "ai-chat",
+    "one-person-company"
+  ],
   "license": "MIT",
   "author": "OPC Team",
   "repository": {
@@ -11,12 +19,13 @@
   },
   "type": "module",
   "bin": {
-    "opc-tunnel": "./dist/cli.js"
+    "openclaw-skill-opc": "./dist/cli.js"
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "openclaw.plugin.json"
   ],
   "scripts": {
     "build": "tsup",
@@ -28,11 +37,15 @@
   "dependencies": {
     "chalk": "^5.3.0",
     "commander": "^12.1.0",
+    "node-datachannel": "^0.12.0",
     "ora": "^8.1.0",
-    "yaml": "^2.4.5"
+    "qrcode-terminal": "^0.12.0",
+    "react-native-webrtc": "^124.0.7",
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",
+    "@types/ws": "^8.5.10",
     "tsup": "^8.1.0",
     "typescript": "^5.5.0"
   },
