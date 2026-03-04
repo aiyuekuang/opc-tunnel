@@ -2,7 +2,7 @@ import chalk from 'chalk';
 import { createInterface } from 'node:readline';
 import type { ApiResponse } from './types.js';
 
-const DEFAULT_API_BASE = 'http://10.0.0.55:3000';
+const DEFAULT_API_BASE = 'http://117.72.173.146:3000';
 
 interface LoginData {
   access_token: string;
